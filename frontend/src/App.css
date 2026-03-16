@@ -13,15 +13,26 @@ body {
 
 .app {
   text-align: center;
-  padding: 40px;
+  padding: 32px 16px;
+  width: 100%;
+  max-width: 700px;
+}
+
+h1 {
+  font-size: 56px;
+  margin-bottom: 20px;
+}
+
+.new-game-btn {
+  margin-bottom: 24px;
 }
 
 .board {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin: 20px 0;
   align-items: center;
+  margin-bottom: 24px;
 }
 
 .row {
@@ -30,8 +41,8 @@ body {
 }
 
 .tile {
-  width: 60px;
-  height: 60px;
+  width: 58px;
+  height: 58px;
   border: 2px solid #3a3a3c;
   display: flex;
   align-items: center;
@@ -39,6 +50,7 @@ body {
   font-size: 28px;
   font-weight: bold;
   text-transform: uppercase;
+  background: transparent;
 }
 
 .tile.correct {
@@ -57,15 +69,42 @@ body {
 }
 
 .controls {
-  margin-top: 10px;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
 }
 
 input {
-  padding: 8px;
+  padding: 10px 12px;
   font-size: 16px;
+  border-radius: 6px;
+  border: 1px solid #555;
+  background: #1a1a1b;
+  color: white;
+  min-width: 260px;
 }
 
 button {
-  padding: 8px 12px;
-  margin-left: 8px;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 6px;
+  background: #538d4e;
+  color: white;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+button:hover {
+  opacity: 0.9;
+}
+
+.message {
+  margin-top: 12px;
+  font-size: 16px;
+}
+
+.result-box {
+  margin-top: 16px;
 }

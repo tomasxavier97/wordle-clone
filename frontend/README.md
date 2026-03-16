@@ -55,7 +55,7 @@ Running the Project
 
 1. Clone the repository
 
-git clone <repository-url>
+git clone https://github.com/tomasxavier97/wordle-clone.git
 cd wordle-clone
 
 Backend Setup

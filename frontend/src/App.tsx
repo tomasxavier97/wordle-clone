@@ -21,47 +21,81 @@ type GuessResponse = {
   word?: string;
 };
 
+
 function App() {
   const [sessionId, setSessionId] = useState("");
   const [guesses, setGuesses] = useState<GuessResponse[]>([]);
-  const [word, setWord] = useState("");
+  const [guessWord, setGuessWord] = useState("");
+  const [secretWord, setSecretWord] = useState("");
+  const [phase, setPhase] = useState<"setup" | "playing" | "finished">("setup");
   const [gameOver, setGameOver] = useState(false);
   const [message, setMessage] = useState("");
   const [revealedWord, setRevealedWord] = useState("");
+  const [won, setWon] = useState(false);
 
   const startGame = async () => {
     try {
       const res = await api.post("/game");
+
       setSessionId(res.data.session_id);
       setGuesses([]);
-      setWord("");
+      setGuessWord("");
+      setSecretWord("");
+      setPhase("setup");
       setGameOver(false);
       setMessage("");
       setRevealedWord("");
+      setWon(false);
     } catch (error) {
-      console.error("Erro ao criar jogo:", error);
-      setMessage("Erro ao criar novo jogo.");
+      console.error("Erro ao criar sessao:", error);
+      setMessage("Erro ao criar nova sessao.");
     }
   };
 
-  const sendGuess = async () => {
-    if (word.length !== 5) {
+  const setWordForSession = async () => {
+    if (!sessionId) return;
+
+    if (secretWord.length !== 5) {
       setMessage("A palavra deve ter 5 letras.");
       return;
     }
 
     try {
-      const res = await api.post(`/game/${sessionId}/guess`, {
-        word: word.toLowerCase(),
+      await api.post(`/game/${sessionId}/set-word`, {
+        word: secretWord.toLowerCase(),
+      });
+
+      setSecretWord("");
+      setPhase("playing");
+      setMessage("Palavra definida. Jogador B pode começar.");
+    } catch (error: any) {
+      console.error("Erro ao definir palavra:", error);
+      setMessage(error?.response?.data?.message || "Erro ao definir a palavra.");
+    }
+  };
+
+  const sendGuess = async () => {
+    if (!sessionId) return;
+
+    if (guessWord.length !== 5) {
+      setMessage("A palavra deve ter 5 letras.");
+      return;
+    }
+
+    try {
+      const res = await api.post<GuessResponse>(`/game/${sessionId}/guess`, {
+        word: guessWord.toLowerCase(),
       });
 
       setGuesses((prev) => [...prev, res.data]);
-      setWord("");
+      setGuessWord("");
       setMessage("");
 
       if (res.data.game_over) {
         setGameOver(true);
+        setWon(res.data.won);
         setRevealedWord(res.data.word || "");
+        setPhase("finished");
         setMessage(res.data.won ? "Parabéns, ganhaste!" : "Fim do jogo.");
       }
     } catch (error: any) {
@@ -74,6 +108,29 @@ function App() {
     startGame();
   }, []);
 
+  const renderBoard = () => {
+    return Array.from({ length: 6 }).map((_, rowIndex) => {
+      const guess = guesses[rowIndex];
+
+      return (
+        <div className="row" key={rowIndex}>
+          {Array.from({ length: 5 }).map((_, colIndex) => {
+            const cell = guess?.result?.[colIndex];
+
+            return (
+              <div
+                key={colIndex}
+                className={`tile ${cell ? cell.status : ""}`}
+              >
+                {cell?.letter || ""}
+              </div>
+            );
+          })}
+        </div>
+      );
+    });
+  };
+
   return (
     <div className="app">
       <h1>Wordle Clone</h1>
@@ -82,37 +139,29 @@ function App() {
         Novo jogo
       </button>
 
-      <div className="board">
-        {Array.from({ length: 6 }).map((_, rowIndex) => {
-          const guess = guesses[rowIndex];
+      <div className="board">{renderBoard()}</div>
 
-          return (
-            <div className="row" key={rowIndex}>
-              {Array.from({ length: 5 }).map((_, colIndex) => {
-                const cell = guess?.result?.[colIndex];
+      {phase === "setup" && (
+        <div className="controls">
+          <input
+            type="password"
+            value={secretWord}
+            onChange={(e) => setSecretWord(e.target.value.slice(0, 5))}
+            maxLength={5}
+            placeholder="Jogador A define a palavra"
+          />
+          <button onClick={setWordForSession}>Definir palavra</button>
+        </div>
+      )}
 
-                return (
-                  <div
-                    key={colIndex}
-                    className={`tile ${cell ? cell.status : ""}`}
-                  >
-                    {cell?.letter || ""}
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })}
-      </div>
-
-      {!gameOver && (
+      {phase === "playing" && !gameOver && (
         <div className="controls">
           <input
             type="text"
-            value={word}
-            onChange={(e) => setWord(e.target.value.slice(0, 5))}
+            value={guessWord}
+            onChange={(e) => setGuessWord(e.target.value.slice(0, 5))}
             maxLength={5}
-            placeholder="palavra"
+            placeholder="Jogador B tenta adivinhar"
           />
           <button onClick={sendGuess}>Enviar</button>
         </div>
@@ -120,13 +169,16 @@ function App() {
 
       {message && <p className="message">{message}</p>}
 
-      {gameOver && revealedWord && (
-        <p className="message">
-          Palavra correta: <strong>{revealedWord.toUpperCase()}</strong>
-        </p>
+      {phase === "finished" && revealedWord && (
+        <div className="result-box">
+          <p className="message">
+            {won ? "Parabéns, ganhaste!" : "Fim do jogo."}
+          </p>
+          <p className="message">
+            Palavra correta: <strong>{revealedWord.toUpperCase()}</strong>
+          </p>
+        </div>
       )}
-
-      <p className="session">Sessão: {sessionId}</p>
     </div>
   );
 }

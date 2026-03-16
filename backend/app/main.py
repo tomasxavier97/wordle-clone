@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.database import Base, engine, SessionLocal
 from app.models import Game, Guess
-from app.word_repository import get_random_word, is_valid_word
+from app.word_repository import is_valid_word
 from app.game_logic import evaluate_guess
 
 Base.metadata.create_all(bind=engine)
@@ -54,12 +54,11 @@ def root():
 @app.post("/game", status_code=201)
 def create_game(db: Session = Depends(get_db)):
     session_id = str(uuid.uuid4())
-    secret_word = get_random_word()
 
     game = Game(
         id=session_id,
-        word=secret_word,
-        status="active",
+        word=None,
+        status="setup",
         guesses_used=0
     )
 
@@ -73,6 +72,46 @@ def create_game(db: Session = Depends(get_db)):
     }
 
 
+@app.post("/game/{session_id}/set-word")
+def set_word(session_id: str, payload: dict, db: Session = Depends(get_db)):
+    chosen_word = payload.get("word", "").lower().strip()
+
+    game = db.query(Game).filter(Game.id == session_id).first()
+
+    if not game:
+        raise HTTPException(status_code=404, detail={
+            "error": "not_found",
+            "message": "Sessão não encontrada"
+        })
+
+    if game.word is not None:
+        raise HTTPException(status_code=409, detail={
+            "error": "already_set",
+            "message": "Palavra já foi definida nesta sessão"
+        })
+
+    if len(chosen_word) != WORD_LENGTH:
+        raise HTTPException(status_code=400, detail={
+            "error": "invalid_length",
+            "message": "A palavra deve ter 5 letras"
+        })
+
+    if not is_valid_word(chosen_word):
+        raise HTTPException(status_code=400, detail={
+            "error": "invalid_word",
+            "message": "Palavra não existe no dicionário"
+        })
+
+    game.word = chosen_word
+    game.status = "active"
+    db.commit()
+
+    return {
+        "session_id": game.id,
+        "status": "ready"
+    }
+
+
 @app.post("/game/{session_id}/guess")
 def submit_guess(session_id: str, payload: dict, db: Session = Depends(get_db)):
     guess_word = payload.get("word", "").lower().strip()
@@ -83,6 +122,12 @@ def submit_guess(session_id: str, payload: dict, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail={
             "error": "not_found",
             "message": "Sessão não encontrada"
+        })
+
+    if game.status == "setup":
+        raise HTTPException(status_code=409, detail={
+            "error": "not_ready",
+            "message": "A sessão ainda não está pronta para jogar"
         })
 
     if game.status != "active":
@@ -106,7 +151,6 @@ def submit_guess(session_id: str, payload: dict, db: Session = Depends(get_db)):
     result = evaluate_guess(game.word, guess_word)
     guesses_used = game.guesses_used + 1
     won = guess_word == game.word
-    game_over = won or guesses_used >= MAX_GUESSES
 
     guess = Guess(
         game_id=game.id,
@@ -114,10 +158,10 @@ def submit_guess(session_id: str, payload: dict, db: Session = Depends(get_db)):
         result=json.dumps(result),
         attempt_number=guesses_used
     )
-
     db.add(guess)
 
     game.guesses_used = guesses_used
+
     if won:
         game.status = "won"
     elif guesses_used >= MAX_GUESSES:
@@ -130,7 +174,7 @@ def submit_guess(session_id: str, payload: dict, db: Session = Depends(get_db)):
         "result": result,
         "guesses_used": guesses_used,
         "guesses_remaining": MAX_GUESSES - guesses_used,
-        "game_over": game.status != "active",
+        "game_over": game.status in ["won", "lost"],
         "won": won
     }
 
@@ -170,8 +214,9 @@ def get_game_state(session_id: str, db: Session = Depends(get_db)):
         "guesses": parsed_guesses,
         "guesses_used": game.guesses_used,
         "guesses_remaining": MAX_GUESSES - game.guesses_used,
-        "game_over": game.status != "active",
-        "won": game.status == "won"
+        "game_over": game.status in ["won", "lost"],
+        "won": game.status == "won",
+        "status": game.status
     }
 
 
@@ -191,7 +236,7 @@ def get_stats(db: Session = Depends(get_db)):
     return {
         "total_games": total_games,
         "total_wins": total_wins,
-        "win_rate": round(win_rate, 2),
+        "win_rate": round(win_rate, 3),
         "guess_distribution": guess_distribution,
         "current_streak": 0,
         "max_streak": 0

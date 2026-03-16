@@ -7,8 +7,8 @@ class Game(Base):
     __tablename__ = "games"
 
     id = Column(String, primary_key=True, index=True)
-    word = Column(String, nullable=False)
-    status = Column(String, nullable=False, default="active")
+    word = Column(String, nullable=True)
+    status = Column(String, nullable=False, default="setup")
     guesses_used = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

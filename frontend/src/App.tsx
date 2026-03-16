@@ -126,7 +126,6 @@ function App() {
         </p>
       )}
 
-      <p className="session">Sessão: {sessionId}</p>
     </div>
   );
 }
